@@ -1,0 +1,252 @@
+smalpartlimit=10000;
+bigpartlimit=500000;
+outliremvrad=5.0;
+outliremvthres=5.0;
+setma=25;
+setmin=255;
+subtractval=20;
+Numbsmooth=20;
+NumbCuts= 20;
+HeightCuts=400;
+ThickRetina= 240;
+TotalRetina= 0;
+path=getDir("image");
+imagetitle= getInfo("image.title");
+Origpath=getDir("file") + imagetitle;
+Pixelratio= 0.679;
+HorzPix= 36;
+
+t=0;
+n=0;
+x=0;
+
+DoDespec = true;
+DoRemovPart = true;
+DoContrast = true;
+DoWindowlvl = true;
+DoSubtract = true;
+DoNumbsmooth = true;
+DoEdgeexc = false;
+
+run("8-bit");
+
+  Dialog.create("VKH-Detach Settings");
+
+  Dialog.addNumber("Slice Number: ", NumbCuts);
+  Dialog.addNumber("Slice Height: ", HeightCuts);
+
+  Dialog.addNumber("Maximum Area Limit: ", bigpartlimit);
+  Dialog.addNumber("Minimum Area Limit: ", smalpartlimit);
+
+  Dialog.addCheckbox("Despeckle: ", DoDespec);
+
+  Dialog.addCheckbox("Remove Outliers: ", DoRemovPart);
+  Dialog.addNumber("Outlier Radius: ", outliremvrad);
+  Dialog.addNumber("Outlier Threshold: ", outliremvthres);
+
+  Dialog.addCheckbox("Adjust Contrast: ", DoContrast);
+
+  Dialog.addCheckbox("Window Level: ", DoWindowlvl );
+  Dialog.addNumber("Maximum (0-255): ", setma);
+  Dialog.addNumber("Minimum (0-255): ", setmin);
+
+  Dialog.addCheckbox("Subtract: ", DoSubtract);
+  Dialog.addNumber("Value Subtracted (0-255): ", subtractval);
+
+  Dialog.addCheckbox("Smooth:", DoNumbsmooth);
+  Dialog.addNumber("Smooth Cycles: ", Numbsmooth);
+
+  Dialog.addNumber("RETINAL SLICE THICKNESS (µL): ", ThickRetina);
+
+  Dialog.addNumber("Pixel Ratio: ", Pixelratio);
+  Dialog.addNumber("Set Horizontal Scale: ", HorzPix);
+  Dialog.addCheckbox("Exclude on Edges: ", DoEdgeexc);
+
+  Dialog.show();
+
+  NumbCuts = Dialog.getNumber();
+  HeightCuts = Dialog.getNumber(); ;
+
+  bigpartlimit = Dialog.getNumber(); ; ;
+  smalpartlimit = Dialog.getNumber(); ; ; ;
+
+  DoDespec = Dialog.getCheckbox();
+
+  DoRemovPart = Dialog.getCheckbox(); ;
+  outliremvrad= Dialog.getNumber(); ; ; ;
+  outliremvthres = Dialog.getNumber(); ; ; ; ;
+
+  DoContrast = Dialog.getCheckbox(); ; ;
+
+  DoWindowlvl = Dialog.getCheckbox(); ; ; ;
+  setma= Dialog.getNumber(); ; ; ; ;
+  setmin = Dialog.getNumber(); ; ; ; ; ;   
+
+  DoSubtract = Dialog.getCheckbox(); ; ; ; ;
+  subtractval = Dialog.getNumber(); ; ; ; ; ; ;
+
+  DoNumbsmooth = Dialog.getCheckbox(); ; ; ; ; ;
+  Numbsmooth = Dialog.getNumber(); ; ; ; ; ; ; ;
+
+  ThickRetina = Dialog.getNumber(); ; ; ; ; ; ; ; ;
+
+  Pixelratio = Dialog.getNumber(); ; ; ; ; ; ; ; ; ;
+  HorzPix = Dialog.getNumber(); ; ; ; ; ; ; ; ; ; ;
+  DoEdgeexc = Dialog.getCheckbox(); ; ; ; ; ; ;
+
+run("8-bit");
+run("Set Scale...", "distance=HorzPix known=200 pixel=Pixelratio unit=µm");
+makeRectangle(495, 0, 1025, 496);
+run("Duplicate...", "title=Dup1.avi duplicate");
+selectWindow("Dup1.avi");
+run("Duplicate...", "title=Dup2.avi duplicate");
+selectWindow("Dup1.avi");
+
+WidthCut= getWidth()/NumbCuts;
+
+while(x<=NumbCuts)
+{
+	x++;
+	makeLine(x*WidthCut, (getHeight()-HeightCuts)/2, x*WidthCut, getHeight()-(getHeight()-HeightCuts)/2);
+	run("Fill", "slice");
+	run("Fill", "stack");	
+}
+x = 0;
+
+selectWindow("Dup2.avi");
+
+if(DoSubtract == true)
+{
+	run("Subtract...", "value=subtractval stack");
+}
+
+if(DoDespec == true)
+{
+	run("Despeckle", "stack");
+}
+
+if(DoWindowlvl == true)
+{
+	run("Window/Level...");
+	setMinAndMax(setma, setmin);
+	run("Apply LUT", "stack");
+}
+
+if(DoContrast == true)
+{
+	run("Enhance Contrast", "saturated=0.35");
+	run("Apply LUT", "stack");
+	run("Enhance Contrast", "saturated=0.35");
+	run("Apply LUT", "stack");
+}
+
+if(DoRemovPart == true)
+{
+	run("Remove Outliers...", "radius=outliremvrad threshold=outliremvthres which=Bright stack");
+}
+
+while(n<Numbsmooth && DoNumbsmooth == true) 
+{
+	n++;
+	run("Smooth", "stack");
+}
+
+while(x<=NumbCuts)
+{
+	x++;
+	makeLine(x*WidthCut, (getHeight()-HeightCuts)/2, x*WidthCut, getHeight()-(getHeight()-HeightCuts)/2);
+	run("Fill", "slice");
+	run("Fill", "stack");	
+}
+x = 0;
+
+setAutoThreshold("Mean no-reset");
+//run("Threshold...");
+setOption("BlackBackground", true);
+run("Convert to Mask", "method=Mean background=Dark calculate black create");
+
+selectWindow("Dup1.avi");
+imageCalculator("AND create stack", "Dup1.avi","MASK_Dup2.avi");
+selectWindow("Result of Dup1.avi");
+setAutoThreshold("Mean dark no-reset");
+
+//run("Threshold...");
+run("Convert to Mask", "method=Mean background=Light calculate black create");
+selectWindow("MASK_Result of Dup1.avi");
+
+run("Clear Results");
+
+if(DoEdgeexc == false)
+{
+	run("Analyze Particles...", "size=smalpartlimit-bigpartlimit show=[Overlay Masks] display overlay stack");
+}
+else
+{
+	run("Analyze Particles...", "size=smalpartlimit-bigpartlimit show=[Overlay Masks] display exclude overlay stack");
+}
+
+selectWindow("Dup1.avi");
+close();
+
+selectWindow("Result of Dup1.avi");
+close();
+
+selectWindow("Dup2.avi");
+close();
+
+selectWindow("MASK_Dup2.avi");
+close();
+
+selectWindow("MASK_Result of Dup1.avi");
+
+filename=imagetitle + " Results.xls";
+saveAs("Results", path + filename);
+
+while(t<nResults)
+{
+	TotalRetina=TotalRetina + getResult("Area", t);
+	t++;
+}
+
+VolRetina=ThickRetina*TotalRetina;
+
+print("\\Clear");
+print("VKH-Detach Analysis 1.0");
+print("");
+print(Origpath);
+print("");
+print("Estimated Total Retinal Detachment Volume:", VolRetina/1000000000, "µL");
+print("");
+print("Slice Number: ", NumbCuts);
+print("Slice Height: ", HeightCuts);
+print("");
+print("Maximum Area Limit: ", bigpartlimit);
+print("Minimum Area Limit: ", smalpartlimit);
+print("");
+print("Despeckle: ", DoDespec);
+print("");
+print("Remove Outliers: ", DoRemovPart);
+print("Outlier Radius: ", outliremvrad);
+print("Outlier Threshold: ", outliremvthres);
+print("");
+print("Adjust Contrast: ", DoContrast);
+print("");
+print("Window Level: ", DoWindowlvl);
+print("Maximum: ", setma);
+print("Minimum: ", setmin);
+print("");
+print("Subtract: ", DoSubtract);
+print("Value Subtracted: ", subtractval);
+print("");
+print("Smooth: ", DoNumbsmooth);
+print("Smooth Cycles: ", Numbsmooth);
+print("");
+print("RETINAL SLICE THICKNESS:", ThickRetina, "µm");
+print("");
+print("Pixel Ratio: ", Pixelratio);
+print("Scale Horizontal Scale: ", HorzPix);
+print("");
+print("Exclude on Edges: ", DoEdgeexc);
+
+filename=imagetitle + " Log.txt";
+saveAs("Text", path + filename);
